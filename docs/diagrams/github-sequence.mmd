@@ -1,0 +1,30 @@
+sequenceDiagram
+    actor User
+    participant API as FastAPI Adapter
+    participant CM as New CodeManager
+    participant GH as GitHubDownloader
+    participant GitHub as api.github.com
+    participant Archive as codeload.github.com
+    participant Reader as Shared ZIP Reader
+    participant Registry as ProjectRegistry
+    User->>API: POST GitHub root URL and optional projectName
+    API->>CM: loadGit(url)
+    CM->>GH: Validate URL and fetch within overall deadline
+    GH->>GitHub: GET repository metadata, optional API-only token
+    GitHub-->>GH: Public metadata and actual default_branch
+    GH->>GitHub: GET zipball for default_branch
+    GitHub-->>GH: Controlled HTTPS archive redirect
+    GH->>Archive: GET bounded ZIP without Authorization
+    Archive-->>GH: Archive bytes
+    GH-->>CM: Archive, canonical name, known wrapper prefix
+    CM->>Reader: Validate archive and remove known GitHub wrapper
+    Reader->>Reader: Preserve nested paths and decode original source
+    Reader-->>CM: Sorted SourceFile list
+    CM->>CM: Validate candidate and replace project
+    CM-->>API: List of SourceFile
+    API->>CM: getProject()
+    CM-->>API: PyProject
+    API->>Registry: Atomic capacity check and register snapshot
+    Registry-->>API: Registered
+    API-->>User: HTTP 201 project JSON
+    Note over API,Registry: Any acquisition, decoding, deadline, or capacity error returns mapped JSON; prior projects remain

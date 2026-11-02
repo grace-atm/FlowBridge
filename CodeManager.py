@@ -1,16 +1,5 @@
-class sourceFile():
-    def __init__(self, fileID, fileName=None, fileContent=None):
-        self.fileID = fileID
-        self.fileName = fileName
-        self.fileContent = fileContent
+"""Compatibility imports for the original capstone module and UML class names."""
 
-    def __str__(self):
-        return fileContent
+from flowbridge import CodeManager, PyProject, SourceFile, pyProject, sourceFile
 
-class pyProject():
-    def __init__(self, projectID, projectName, files=[]):
-        self.projectID = projectID
-        self.projectName = projectName
-        self.files=list[sourceFile]
-
-    def 
+__all__ = ["CodeManager", "PyProject", "SourceFile", "pyProject", "sourceFile"]

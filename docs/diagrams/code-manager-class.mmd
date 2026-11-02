@@ -1,0 +1,50 @@
+classDiagram
+    class CodeManager {
+        +PyProject project
+        +loadFile(BinaryIO file, str fileName, str projectName) List~SourceFile~
+        +loadZip(BinaryIO file, str fileName, str projectName) List~SourceFile~
+        +loadGit(str url, str projectName) List~SourceFile~
+        +getProject() PyProject
+        +getSourceFile(str fileID) SourceFile
+        +getSourceFileByPath(str filePath) SourceFile
+    }
+    class PyProject {
+        +str projectID
+        +str projectName
+        +List~SourceFile~ files
+        +addFile(SourceFile file) None
+        +getFileByID(str fileID) SourceFile
+        +getFileID(str fileID) SourceFile
+        +model_dump_json() str
+    }
+    class SourceFile {
+        +str fileID
+        +str fileName
+        +str filePath
+        +str fileContent
+    }
+    class ProjectRegistry {
+        +register(PyProject project) None
+        +getProject(str projectID) PyProject
+        +getSourceFile(str projectID, str fileID) SourceFile
+        +clear() None
+    }
+    class FastAPIAdapter
+    class GitHubDownloader {
+        +fetch(str url) RepositoryArchive
+    }
+    class SourceReaders {
+        +read_bounded(BinaryIO stream, int limit) bytes
+        +decode_source(bytes data, str filePath) SourceFile
+        +read_zip(bytes data, ImportLimits limits) List~SourceFile~
+    }
+    CodeManager --> PyProject : current project
+    PyProject "1" *-- "0..*" SourceFile : original source
+    CodeManager ..> GitHubDownloader : archive acquisition
+    CodeManager ..> SourceReaders : bounded shared readers
+    FastAPIAdapter ..> CodeManager : new instance per import
+    FastAPIAdapter --> ProjectRegistry : application-owned
+    ProjectRegistry "1" o-- "0..10" PyProject : validated snapshots
+    note for PyProject "pyProject is an alias. getFileID returns the file object."
+    note for SourceFile "sourceFile is an alias. Source identity and content are frozen."
+    note for CodeManager "fileName and projectName are keyword-only. projectName is optional. project starts as None."

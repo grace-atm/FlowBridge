@@ -1,0 +1,32 @@
+sequenceDiagram
+    actor User
+    participant UI as UI or API Docs
+    participant API as FastAPI Adapter
+    participant CM as New CodeManager
+    participant Reader as Shared Source and ZIP Readers
+    participant Registry as ProjectRegistry
+    User->>UI: Select Python file or ZIP
+    UI->>API: POST multipart file and optional projectName
+    API->>CM: loadFile or loadZip with binary stream and filename
+    CM->>Reader: Read bounded bytes and validate input
+    Reader->>Reader: Check paths, metadata, eligibility, encoding
+    alt Any eligible file fails
+        Reader-->>CM: Domain error
+        CM-->>API: Error without replacing project
+        API-->>UI: Consistent JSON error and mapped status
+    else Complete candidate is valid
+        Reader-->>CM: Sorted original SourceFile list
+        CM->>CM: Validate PyProject and assign project
+        CM-->>API: List of SourceFile
+        API->>CM: getProject()
+        CM-->>API: PyProject
+        API->>Registry: Atomic capacity check and register snapshot
+        alt Registry full
+            Registry-->>API: RegistryCapacityExceeded
+            API-->>UI: HTTP 503 error, prior projects retained
+        else Registered
+            Registry-->>API: Registered
+            API-->>UI: HTTP 201 project JSON
+        end
+    end
+    Note over CM,Registry: Future coordinator passes getProject() to Harsha's analyzeProject outside CodeManager
