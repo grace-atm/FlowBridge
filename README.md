@@ -1,156 +1,89 @@
 # FlowBridge Code Manager
 
-Code Manager imports a Python file, ZIP project, or public GitHub repository into
-one shared `PyProject` contract. It preserves decoded original source for Harsha's
-parser and the Source-Mapping Layer. It does not execute or parse imported code.
+Code Manager accepts a Python file, ZIP, or public GitHub repository. It collects
+the Python files into one project, keeps their original source and folder paths,
+and makes those files available to the parser and source-code view.
 
-The existing HTML, CSS, and JavaScript remain the team's frontend prototype.
-The backend can be demonstrated independently through its CLI and FastAPI docs.
+The repository is now named [FlowBridge](https://github.com/jerphan/FlowBridge).
+This backend is on `codex/code-manager` in [PR #1](https://github.com/jerphan/FlowBridge/pull/1).
+The team's newer React/Vite frontend is on `main`; the backend PR still needs to
+be merged and the UI connected to its routes.
+
+## Start with three files
+
+| File | What to look for |
+| --- | --- |
+| [flowbridge/service.py](flowbridge/service.py) | `CodeManager`: import a file, ZIP, or GitHub repository, then retrieve the project or an original file. |
+| [flowbridge/models.py](flowbridge/models.py) | `SourceFile` stores one file's ID, name, path, and text; `PyProject` groups the files. |
+| [flowbridge/api.py](flowbridge/api.py) | FastAPI routes that let the UI call the module. |
+
+The root [CodeManager.py](CodeManager.py) only keeps the original import names
+working. The implementation is inside `flowbridge/`.
 
 ## How the module works
 
 ```mermaid
 flowchart TD
-    Upload["Python file or ZIP upload"] --> API["FastAPI import routes"]
-    URL["Public GitHub repository URL"] --> API
-    API --> Manager["CodeManager: one instance per import"]
-    Manager -->|GitHub input| GitHub["Read public metadata and default-branch ZIP"]
-    Manager -->|Uploaded bytes| Readers["Shared readers: paths, size limits, source decoding"]
-    GitHub --> Readers
-    Readers --> Valid{"All input and decoding checks pass?"}
-    Valid -->|No| Error["JSON error; previous projects remain available"]
-    Valid -->|Yes| Project["PyProject + SourceFile list: UUIDs, relative paths, original source"]
-    Project --> Registry["ProjectRegistry: atomic capacity check and source snapshot"]
-    Registry -->|Full| Error
-    Registry -->|Stored| Result["HTTP 201: project JSON"]
-    Registry --> Lookup["GET project or original file using projectID and fileID"]
-    Result -.->|Future coordinator handoff| Parser["Harsha: analyzeProject"]
-    Parser -.-> Diagram["Diagram Manager and React Flow"]
-    Diagram -.->|Selected diagram element| Mapping["Source-Mapping Layer and code view"]
-    Lookup -.->|Original source for highlighting| Mapping
+    Input["Python file, ZIP, or GitHub URL"] --> API["FastAPI receives the request"]
+    API --> Manager["CodeManager reads and checks the files"]
+    Manager --> Project["PyProject: file IDs, relative paths, original text"]
+    Project --> Registry["Save the project in memory"]
+    Registry --> Result["Return project JSON to the UI"]
+    Registry --> Lookup["Retrieve an original file by project ID and file ID"]
+    Result -.-> Parser["Next module: Parsing and Analysis"]
 ```
 
-Solid arrows show implemented behavior. Dashed arrows show the team integration
-still to connect. Input validation checks file formats, paths, resource limits,
-and source encoding; Python syntax errors remain original text for Harsha's parser.
-The API returns a project only after all eligible files pass import checks and
-the registry accepts the complete source snapshot.
+All three inputs produce the same project format. Failed imports leave earlier
+projects available. The dotted arrow is future integration: Code Manager reads
+source as text; Harsha's parser will analyze it and build the graph data.
 
-For a short reading order and explanation of the main functions, see the
-[quick walkthrough](docs/CODE_MANAGER_HANDOFF.md#quick-walkthrough).
+## Why the other files exist
 
-## Stack and module size
+`readers.py` and `paths.py` handle source text, ZIP entries, and relative paths.
+`github.py` downloads repository ZIPs for that same reader. `registry.py` keeps
+successful projects available between requests, until the server stops.
+`config.py` and `errors.py` hold limits and shared error messages; `cli.py` runs
+the terminal demo.
 
-The Stage 2 slides recommend FastAPI and pytest for the Python backend; both are
-used here. React, React Flow, and Vitest belong to the UI/diagram work. SQLite is
-the proposed persistence option; this demo uses the in-memory registry requested
-by the detailed module specification. Pydantic v2 and HTTPX provide the shared
-models and GitHub requests required by that specification.
+`tests/` checks behavior, `examples/` supplies a small nested project, and `docs/`
+contains the detailed handoff. `pyproject.toml` lists Python dependencies;
+`uv.lock` records their versions and is generated by uv.
 
-The runtime package and compatibility module total 1,036 physical Python lines,
-including spacing/docstrings, or 820 excluding blank lines, comments, and
-docstrings. The `CodeManager` service itself is 111 physical lines. Tests add
-1,150 lines, and the generated `uv.lock` adds 550; those are separate from the
-runtime implementation. Most input-handling code covers source preservation,
-ZIP validation, GitHub redirects/timeouts, and safe error handling.
-
-## Install and start
+## Run the backend
 
 Use Python 3.12 and [uv](https://docs.astral.sh/uv/getting-started/installation/).
-Run these commands from the repository root:
+From this branch's repository root:
 
 ```powershell
 uv sync --locked
 uv run uvicorn flowbridge.api:app --host 127.0.0.1 --port 8000
 ```
 
-Open <http://127.0.0.1:8000/docs> for working file, ZIP, and GitHub import controls.
-`GET /health` returns `{"status":"ok"}`. Use one server worker for this in-memory
-demo: separate workers/processes have separate project registries.
+Open <http://127.0.0.1:8000/docs> to try file, ZIP, and GitHub imports. The demo
+stores projects in memory, so use one server worker and expect a restart to clear
+them. Public GitHub imports work without a token.
 
-Optional GitHub token, set before starting the backend:
-
-```powershell
-$env:GITHUB_TOKEN = "your-token"
-```
-
-Public repositories work without a token. Do not commit tokens. The backend reads
-the process environment; it does not automatically load a `.env` file.
-
-## Test and demonstrate
+## Test or try one file
 
 ```powershell
 uv run pytest -q --cov=flowbridge --cov-report=term-missing
-uv run ruff check .
-uv run ruff format --check .
-
 uv run flowbridge-code file examples/sample_project/app/main.py
-uv run python -c "import shutil; shutil.make_archive('demo-project', 'zip', 'examples/sample_project')"
-uv run flowbridge-code zip demo-project.zip --project-name "Nested demo"
-
-# Optional live smoke test; excluded from automated tests, requires internet:
-uv run flowbridge-code github https://github.com/jerphan/CodeToChart
-
-# Real local server smoke test; starts/stops its own server, no GitHub requests:
-uv run python scripts/smoke_api.py
 ```
 
-`uv run python -m flowbridge file <path.py>` is an equivalent CLI entry point.
-The CLI accepts supplied local files; the HTTP API accepts uploads and never opens
-a caller-provided server-local pathname. JSON goes to stdout. Import errors go to
-stderr with exit code 1.
+The terminal demo prints the same project JSON returned by the API.
 
 ## HTTP contract
 
-| Route | Input | Success |
-| --- | --- | --- |
-| `POST /api/projects/file` | Multipart `file`, optional `projectName` | 201, project JSON |
-| `POST /api/projects/zip` | Multipart `file`, optional `projectName` | 201, project JSON |
-| `POST /api/projects/github` | JSON `url`, optional `projectName` | 201, project JSON |
-| `GET /api/projects/{projectID}` | Project ID | 200, project JSON |
-| `GET /api/projects/{projectID}/files/{fileID}` | Both IDs | 200, original SourceFile JSON |
-| `GET /health` | None | 200, health JSON |
+The response contains `projectID`, `projectName`, and `files`. Each file contains
+`fileID`, `fileName`, `filePath`, and `fileContent`. Keep those names and IDs when
+passing the project to another module.
 
-The import response is the project itself, with no transport wrapper:
+See the [route table and sample JSON](docs/CODE_MANAGER_HANDOFF.md#http-contract)
+for integration details.
 
-```json
-{
-  "projectID": "9d2e8c32-9480-4e32-9aaf-27149b1dfe87",
-  "projectName": "StudentProject",
-  "files": [
-    {
-      "fileID": "8f54f2df-6bb9-4a7e-b62c-940be0ec924b",
-      "fileName": "main.py",
-      "filePath": "app/main.py",
-      "fileContent": "print('hello')\n"
-    }
-  ]
-}
-```
+## More detail when needed
 
-IDs in this example are illustrative. Each fresh import gets new UUIDs. Retain
-the returned IDs when calling the parser or retrieving original source.
-
-Errors consistently use `{"error":{"code":"...","message":"..."}}`, optionally
-including a safe relative `filePath`. Invalid request fields return 400, including
-FastAPI validation failures. See the handoff for all codes and limits.
-
-## Team handoff
-
-- [Integration contract, behavior, limits, and responsibilities](docs/CODE_MANAGER_HANDOFF.md)
-- [Verification evidence and intended-user validation checklist](docs/VALIDATION.md)
-- [Slide-ready bullets for Justin's module](docs/POWERPOINT_BULLETS.md)
-- [Class diagram source](docs/diagrams/code-manager-class.mmd)
-- [Upload sequence source](docs/diagrams/upload-sequence.mmd)
-- [GitHub sequence source](docs/diagrams/github-sequence.mmd)
-
-The original `from CodeManager import ...` imports still work. `pyProject` and
-`sourceFile` are aliases to `PyProject` and `SourceFile`.
-
-## Repository integration
-
-The implementation is on `codex/code-manager`, based on commit
-`9fdaf1fa0c898b709bbf443647dcb1f7fb2950e7`. Review the branch and its checks before
-merging into `main`. Keep the shared field names and IDs when connecting the UI,
-parser, and source-mapping modules. Installation and demonstration commands above
-apply after checking out the implementation branch.
+- [Full team handoff: setup, methods, JSON, limits, and integration](docs/CODE_MANAGER_HANDOFF.md)
+- [Test evidence and user-validation checklist](docs/VALIDATION.md)
+- [Three slides of module talking points](docs/POWERPOINT_BULLETS.md)
+- [Class diagram](docs/diagrams/code-manager-class.mmd), [upload sequence](docs/diagrams/upload-sequence.mmd), and [GitHub sequence](docs/diagrams/github-sequence.mmd)

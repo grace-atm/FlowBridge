@@ -61,6 +61,56 @@ calculation, authentication, or diagram rendering is implemented by this module.
 No uploaded modules are imported, executed, or installed. Python syntax errors are
 preserved as text for the parser. Input decoding errors are handled here.
 
+## Stack and setup
+
+The Stage 2 slides recommend FastAPI and pytest for the Python backend; both are
+used here. Pydantic v2 defines the shared models and HTTPX handles GitHub requests.
+React, React Flow, and Vitest belong to the UI/diagram work. SQLite is the proposed
+persistence option; this demo uses the in-memory registry requested by the module
+specification.
+
+Use Python 3.12 and uv. From the repository root on `codex/code-manager`:
+
+```powershell
+uv sync --locked
+uv run uvicorn flowbridge.api:app --host 127.0.0.1 --port 8000
+```
+
+Open `http://127.0.0.1:8000/docs`. Use one server worker; each process has a
+separate in-memory registry. Restarting clears saved projects.
+
+Public GitHub imports work without a token. An optional token can be set before
+starting the backend:
+
+```powershell
+$env:GITHUB_TOKEN = "your-token"
+```
+
+Do not commit tokens. The backend reads the process environment and does not
+automatically load a `.env` file.
+
+## Terminal demos and checks
+
+```powershell
+uv run pytest -q --cov=flowbridge --cov-report=term-missing
+uv run ruff check .
+uv run ruff format --check .
+
+uv run flowbridge-code file examples/sample_project/app/main.py
+uv run python -c "import shutil; shutil.make_archive('demo-project', 'zip', 'examples/sample_project')"
+uv run flowbridge-code zip demo-project.zip --project-name "Nested demo"
+
+# Optional live import; requires internet and is separate from the automated tests.
+uv run flowbridge-code github https://github.com/jerphan/FlowBridge
+
+# Starts and stops a real local server; makes no GitHub requests.
+uv run python scripts/smoke_api.py
+```
+
+`uv run python -m flowbridge file <path.py>` is an equivalent CLI entry point.
+The CLI opens supplied local files; the HTTP API accepts uploads. Project JSON
+goes to stdout. Import errors go to stderr with exit code 1.
+
 ## Public service API
 
 ```python
@@ -138,7 +188,39 @@ round trips. A fresh import, even of identical input, creates fresh IDs. Default
 display names are the single Python filename stem, ZIP filename stem, or canonical
 GitHub repository name. An override is trimmed and must be nonblank.
 
-See [README sample JSON](../README.md#http-contract) for the exact payload.
+See the [HTTP contract](#http-contract) for the exact payload.
+
+## HTTP contract
+
+| Route | Input | Success |
+| --- | --- | --- |
+| `POST /api/projects/file` | Multipart `file`, optional `projectName` | 201, project JSON |
+| `POST /api/projects/zip` | Multipart `file`, optional `projectName` | 201, project JSON |
+| `POST /api/projects/github` | JSON `url`, optional `projectName` | 201, project JSON |
+| `GET /api/projects/{projectID}` | Project ID | 200, project JSON |
+| `GET /api/projects/{projectID}/files/{fileID}` | Both IDs | 200, original SourceFile JSON |
+| `GET /health` | None | 200, health JSON |
+
+The import response is the project itself:
+
+```json
+{
+  "projectID": "9d2e8c32-9480-4e32-9aaf-27149b1dfe87",
+  "projectName": "StudentProject",
+  "files": [
+    {
+      "fileID": "8f54f2df-6bb9-4a7e-b62c-940be0ec924b",
+      "fileName": "main.py",
+      "filePath": "app/main.py",
+      "fileContent": "print('hello')\n"
+    }
+  ]
+}
+```
+
+These IDs are illustrative. Each fresh import creates new UUIDs; keep the returned
+IDs when calling the parser or retrieving original source. Errors use the shape
+documented in the [error contract](#error-contract).
 
 ## Source, path, and archive policy
 
@@ -292,8 +374,10 @@ const imported = await fetch("http://127.0.0.1:8000/api/projects/github", {
 
 New backend defaults allow local UI origins on ports 5173 and 3000 for localhost
 and 127.0.0.1. Set `create_app(cors_origins=("https://actual-ui-origin",))` when
-integrating another origin. The existing `js/FlowBridgeScript.js` prototype has
-not yet been connected to these routes; it still contains its original demo code.
+integrating another origin. The `codex/code-manager` branch still includes the
+original static frontend prototype. The team's newer React/Vite frontend is in
+`FlowBridgeFrontend/` on `main`; connect that UI to these routes after integrating
+the backend branch.
 
 ## Parser and source-mapping handoff
 
