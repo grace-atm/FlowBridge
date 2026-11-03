@@ -15,7 +15,7 @@ class ProjectRegistry:
 
     def register(self, project: PyProject) -> None:
         # Store a validated copy so caller changes cannot bypass the byte limit.
-        snapshot = PyProject.model_validate_json(project.model_dump_json())
+        snapshot = PyProject.model_validate(project.model_dump())
         size = sum(len(file.fileContent.encode("utf-8")) for file in snapshot.files)
         with self._lock:
             if snapshot.projectID in self._projects:
