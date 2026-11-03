@@ -1,4 +1,10 @@
 import FileUploader from "./components/FileUploader";
+import StartButton from "./components/StartButton";
+import axios from "axios";
+
+const api = axios.create({
+    baseURL: "http://localhost:8000"
+})
 
 function app(){
   return <>
@@ -12,11 +18,7 @@ function app(){
                 <img src="./FlowBridgeIcon.png" alt="Logo Icon" className="logoIcon"/>
                 <span className="brandName">FlowBridge</span>
             </div>
-            <div className="headingCenter">
-                <button className="startButton">
-                    <img src="./StartButton.png" alt="Start Button"/>
-                </button>
-            </div>
+                <StartButton/>
             <div className="headingRight">
                 <div className="user-profile">
                     <div>
