@@ -30,11 +30,13 @@ class ProjectRegistry:
             self._projects[snapshot.projectID] = snapshot
             self._text_bytes += size
 
+    # Return a copy so later changes cannot alter the saved project.
     def getProject(self, projectID: str) -> PyProject:
         with self._lock:
             project = self._find(projectID)
             return project.model_copy(deep=True)
 
+    # Look up the file inside the requested project, using both IDs.
     def getSourceFile(self, projectID: str, fileID: str) -> SourceFile:
         with self._lock:
             return self._find(projectID).getFileByID(fileID)

@@ -1,4 +1,4 @@
-"""Public GitHub archive acquisition with controlled redirects and a total deadline."""
+"""Download public GitHub repositories as ZIPs with size and time limits."""
 
 import asyncio
 import json
@@ -74,6 +74,7 @@ class GitHubDownloader:
         self.client = client
         self._redirects = 0
 
+    # Apply the total download timeout and close any client created here.
     async def fetch(self, url: str) -> RepositoryArchive:
         owner, repository = parse_repository_url(url)
         try:
@@ -89,6 +90,7 @@ class GitHubDownloader:
                 "GitHub could not be reached or returned an invalid response."
             ) from None
 
+    # Read the repository metadata, then download its default branch.
     async def _fetch(
         self, client: httpx.AsyncClient, owner: str, repository: str
     ) -> RepositoryArchive:
@@ -130,6 +132,7 @@ class GitHubDownloader:
         )
         return RepositoryArchive(canonical_name, archive, f"{canonical_owner}-{canonical_name}-")
 
+    # Follow allowed GitHub redirects while enforcing the response size limit.
     async def _get(
         self, client: httpx.AsyncClient, url: str, limit: int, *, metadata: bool
     ) -> bytes:

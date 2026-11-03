@@ -1,4 +1,4 @@
-"""Thin FastAPI adapter. Blocking loaders run in synchronous worker-thread routes."""
+"""HTTP routes for importing projects and retrieving their original source."""
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -49,6 +49,7 @@ def get_code_manager(request: Request) -> CodeManager:
     )
 
 
+# FastAPI supplies these arguments from the current request's app.
 Registry = Annotated[ProjectRegistry, Depends(get_registry)]
 Manager = Annotated[CodeManager, Depends(get_code_manager)]
 ERROR_RESPONSES = {
@@ -123,6 +124,7 @@ def create_app(
     def health() -> dict[str, str]:
         return {"status": "ok"}
 
+    # Each import route saves a complete project before returning it to the UI.
     @app.post("/api/projects/file", status_code=201, responses=ERROR_RESPONSES)
     def import_file(
         manager: Manager,

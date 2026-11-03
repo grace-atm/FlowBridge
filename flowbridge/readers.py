@@ -1,4 +1,4 @@
-"""Bounded binary/source/ZIP readers. Archives are never extracted."""
+"""Read uploaded bytes and Python source without extracting ZIPs to disk."""
 
 import io
 import re
@@ -40,7 +40,7 @@ def read_bounded(stream: BinaryIO, limit: int, *, filePath: str | None = None) -
             raise ImportLimitExceeded("Input exceeds the configured byte limit.", filePath=filePath)
 
 
-# Use the source encoding cookie or BOM without changing whitespace or line endings.
+# Decode Python's declared encoding while keeping spacing and line endings.
 def decode_source(data: bytes, filePath: str) -> SourceFile:
     try:
         encoding, _ = tokenize.detect_encoding(io.BytesIO(data).readline)
@@ -66,6 +66,7 @@ def read_zip(
             if sum(entry.file_size for entry in entries) > limits.max_uncompressed_bytes:
                 raise ImportLimitExceeded("Archive's declared uncompressed size is too large.")
 
+            # Check every entry's path before choosing which files to read.
             paths: list[tuple[zipfile.ZipInfo, str]] = []
             seen: set[str] = set()
             for entry in entries:
@@ -80,6 +81,7 @@ def read_zip(
                 seen.add(path)
                 paths.append((entry, path))
 
+            # Remove GitHub's generated root folder; keep folders in uploaded ZIPs.
             wrapper: str | None = None
             if github_prefix is not None and paths:
                 wrapper = paths[0][1].split("/", 1)[0]
@@ -122,6 +124,7 @@ def read_zip(
             if sum(entry.file_size for entry, _ in selected) > limits.max_source_bytes:
                 raise ImportLimitExceeded("Project's declared Python source size is too large.")
 
+            # Read the selected files in path order and check their actual byte sizes.
             files: list[SourceFile] = []
             actual_total = 0
             for entry, path in sorted(selected, key=lambda item: item[1]):

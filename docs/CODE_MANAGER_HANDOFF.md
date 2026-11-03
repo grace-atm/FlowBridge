@@ -4,6 +4,28 @@ Module owner: Justin Bean
 
 Project: FlowBridge / The Adaptables
 
+## Quick walkthrough
+
+Read these files in this order:
+
+1. `models.py`: `SourceFile` holds one file; `PyProject` groups the files. Pydantic
+   checks the fields when a model is created or read from JSON.
+2. `service.py`: `loadFile`, `loadZip`, and `loadGit` build a new project. They
+   return its file list; `getProject()` returns the complete project.
+3. `readers.py`: reads the original source and checks ZIP paths and size limits.
+   `github.py` downloads a repository ZIP for this same reader.
+4. `api.py`: accepts UI requests and calls the manager. `registry.py` keeps
+   successful imports available for later project and file requests.
+
+A manager holds one current project. A failed import leaves that project alone.
+The API gives each import its own manager, then saves the result in the shared
+registry. That registry is temporary memory and clears when the server stops.
+
+Use `fileID` for file lookup and `filePath` to distinguish files such as
+`app/main.py` and `tests/main.py`. The camelCase names match the team's shared
+JSON and UML contract. The parser receives `fileContent` as the original decoded
+text; this module does not analyze or run it.
+
 ## Implemented contribution
 
 Justin's Code Manager module now provides the shared source/project models,

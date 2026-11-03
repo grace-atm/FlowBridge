@@ -9,6 +9,7 @@ from .errors import CodeManagerError, InvalidInput
 from .service import CodeManager
 
 
+# Run one import from the terminal and print its project JSON.
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Import Python source and print the project JSON.")
     parser.add_argument("kind", choices=("file", "zip", "github"))

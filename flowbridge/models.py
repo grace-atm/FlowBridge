@@ -13,6 +13,7 @@ def _uuid_string(value: str) -> str:
     return str(UUID(value))
 
 
+# One Python file keeps its original text, ID, and path inside the project.
 class SourceFile(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
@@ -38,6 +39,7 @@ class SourceFile(BaseModel):
         return self
 
 
+# A project groups the source files that will be passed to the parser.
 class PyProject(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
@@ -65,6 +67,7 @@ class PyProject(BaseModel):
             raise ValueError("A project cannot contain duplicate file IDs or normalized paths.")
         return self
 
+    # Add a source file only if its ID and path are new to this project.
     def addFile(self, file: SourceFile) -> None:
         if any(item.fileID == file.fileID or item.filePath == file.filePath for item in self.files):
             raise DuplicateFile(

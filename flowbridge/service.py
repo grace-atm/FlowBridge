@@ -1,4 +1,4 @@
-"""Synchronous Code Manager service, independent of FastAPI and the parser."""
+"""Import source files into a project and retrieve their original text."""
 
 import asyncio
 import os
@@ -48,11 +48,13 @@ class CodeManager:
             raise InvalidInput(f"Upload must have a {extension} filename.")
         return name
 
+    # Build the new project before replacing the previous one.
     def _commit(self, files: list[SourceFile], name: str) -> list[SourceFile]:
         candidate = PyProject(projectName=name, files=files)
         self.project = candidate
         return candidate.files
 
+    # Import one Python upload and make it the current project.
     def loadFile(
         self, file: BinaryIO, *, fileName: str, projectName: str | None = None
     ) -> list[SourceFile]:
@@ -63,6 +65,7 @@ class CodeManager:
         )
         return self._commit([decode_source(content, name)], display)
 
+    # Collect the Python files from a ZIP, keeping their relative paths.
     def loadZip(
         self, file: BinaryIO, *, fileName: str, projectName: str | None = None
     ) -> list[SourceFile]:
@@ -71,26 +74,31 @@ class CodeManager:
         content = read_bounded(file, self.limits.max_archive_bytes)
         return self._commit(read_zip(content, self.limits), display)
 
+    # Download a public repository and read it with the same ZIP reader.
     def loadGit(self, url: str, *, projectName: str | None = None) -> list[SourceFile]:
         _, repository = parse_repository_url(url)
         # Check the display name before contacting GitHub.
         self._display_name(projectName, repository)
         start = monotonic()
         downloader = GitHubDownloader(self.limits, self.github_settings, self._github_client)
+        # FastAPI runs this synchronous loader in a worker thread.
         archive = asyncio.run(downloader.fetch(url))
         files = read_zip(archive.data, self.limits, github_prefix=archive.wrapper_prefix)
         if monotonic() - start > self.github_settings.overall_timeout:
             raise GitHubTimeout("GitHub import exceeded the overall deadline.")
         return self._commit(files, self._display_name(projectName, archive.name))
 
+    # Return the project from the last successful import.
     def getProject(self) -> PyProject:
         if self.project is None:
             raise NoProjectLoaded("No project has been imported yet.")
         return self.project
 
+    # Find an original file in the current project using its ID.
     def getSourceFile(self, fileID: str) -> SourceFile:
         return self.getProject().getFileByID(fileID)
 
+    # Find a file by its full relative path, such as app/main.py.
     def getSourceFileByPath(self, filePath: str) -> SourceFile:
         project = self.getProject()
         try:

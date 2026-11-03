@@ -36,6 +36,9 @@ and source encoding; Python syntax errors remain original text for Harsha's pars
 The API returns a project only after all eligible files pass import checks and
 the registry accepts the complete source snapshot.
 
+For a short reading order and explanation of the main functions, see the
+[quick walkthrough](docs/CODE_MANAGER_HANDOFF.md#quick-walkthrough).
+
 ## Stack and module size
 
 The Stage 2 slides recommend FastAPI and pytest for the Python backend; both are
@@ -44,9 +47,9 @@ the proposed persistence option; this demo uses the in-memory registry requested
 by the detailed module specification. Pydantic v2 and HTTPX provide the shared
 models and GitHub requests required by that specification.
 
-The runtime package and compatibility module total 1,014 physical Python lines,
+The runtime package and compatibility module total 1,036 physical Python lines,
 including spacing/docstrings, or 820 excluding blank lines, comments, and
-docstrings. The `CodeManager` service itself is 103 physical lines. Tests add
+docstrings. The `CodeManager` service itself is 111 physical lines. Tests add
 1,150 lines, and the generated `uv.lock` adds 550; those are separate from the
 runtime implementation. Most input-handling code covers source preservation,
 ZIP validation, GitHub redirects/timeouts, and safe error handling.
