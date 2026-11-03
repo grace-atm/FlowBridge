@@ -23,8 +23,8 @@ from .paths import normalize_relative_path
 CHUNK_SIZE = 64 * 1024
 
 
+# Read one extra byte to detect input that exceeds the limit.
 def read_bounded(stream: BinaryIO, limit: int, *, filePath: str | None = None) -> bytes:
-    """Read at most limit+1 bytes, detecting oversize without an unbounded read."""
     data = bytearray()
     while True:
         try:
@@ -40,13 +40,12 @@ def read_bounded(stream: BinaryIO, limit: int, *, filePath: str | None = None) -
             raise ImportLimitExceeded("Input exceeds the configured byte limit.", filePath=filePath)
 
 
+# Use the source encoding cookie or BOM without changing whitespace or line endings.
 def decode_source(data: bytes, filePath: str) -> SourceFile:
-    """Use Python's encoding rules, without parsing or changing whitespace/newlines."""
     try:
         encoding, _ = tokenize.detect_encoding(io.BytesIO(data).readline)
         content = data.decode(encoding, errors="strict")
-        # JSON and the registry's UTF-8 budget require valid Unicode scalar text.
-        # Some escape-based codecs can otherwise produce lone surrogates.
+        # Escape-based codecs can leave lone surrogates that cannot be stored as UTF-8.
         content.encode("utf-8", errors="strict")
     except (SyntaxError, UnicodeError, LookupError):
         raise InvalidSourceEncoding(
@@ -55,10 +54,10 @@ def decode_source(data: bytes, filePath: str) -> SourceFile:
     return SourceFile(fileName=filePath.rsplit("/", 1)[-1], filePath=filePath, fileContent=content)
 
 
+# Read ZIP entries in memory so archive paths are never extracted onto the server.
 def read_zip(
     data: bytes, limits: ImportLimits, *, github_prefix: str | None = None
 ) -> list[SourceFile]:
-    """Validate all paths/metadata first, then read every eligible source atomically."""
     try:
         with zipfile.ZipFile(io.BytesIO(data)) as archive:
             entries = archive.infolist()

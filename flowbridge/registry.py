@@ -1,5 +1,3 @@
-"""Small application-owned registry with atomic capacity checks and source access."""
-
 from threading import Lock
 
 from .config import RegistryLimits
@@ -7,6 +5,7 @@ from .errors import DuplicateFile, ProjectNotFound, RegistryCapacityExceeded
 from .models import PyProject, SourceFile
 
 
+# The registry keeps saved projects available across separate import requests.
 class ProjectRegistry:
     def __init__(self, limits: RegistryLimits | None = None) -> None:
         self.limits = limits or RegistryLimits()
@@ -15,7 +14,7 @@ class ProjectRegistry:
         self._lock = Lock()
 
     def register(self, project: PyProject) -> None:
-        """Snapshot a validated candidate so later caller mutations cannot bypass capacity."""
+        # Store a validated copy so caller changes cannot bypass the byte limit.
         snapshot = PyProject.model_validate_json(project.model_dump_json())
         size = sum(len(file.fileContent.encode("utf-8")) for file in snapshot.files)
         with self._lock:

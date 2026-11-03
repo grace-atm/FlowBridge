@@ -44,9 +44,9 @@ the proposed persistence option; this demo uses the in-memory registry requested
 by the detailed module specification. Pydantic v2 and HTTPX provide the shared
 models and GitHub requests required by that specification.
 
-The runtime package and compatibility module total 1,035 physical Python lines,
+The runtime package and compatibility module total 1,014 physical Python lines,
 including spacing/docstrings, or 820 excluding blank lines, comments, and
-docstrings. The `CodeManager` service itself is 109 physical lines. Tests add
+docstrings. The `CodeManager` service itself is 103 physical lines. Tests add
 1,150 lines, and the generated `uv.lock` adds 550; those are separate from the
 runtime implementation. Most input-handling code covers source preservation,
 ZIP validation, GitHub redirects/timeouts, and safe error handling.

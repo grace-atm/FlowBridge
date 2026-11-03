@@ -15,14 +15,8 @@ from .paths import normalize_relative_path, upload_basename
 from .readers import decode_source, read_bounded, read_zip
 
 
+# An import replaces the current project only after every file has been read.
 class CodeManager:
-    """Each successful load replaces project; every failed load leaves it intact.
-
-    This synchronous class belongs to one project context/coordinator. Async
-    applications should call blocking loaders in a worker thread. API requests
-    each receive a separate manager; completed projects go into the registry.
-    """
-
     def __init__(
         self,
         *,
@@ -79,7 +73,7 @@ class CodeManager:
 
     def loadGit(self, url: str, *, projectName: str | None = None) -> list[SourceFile]:
         _, repository = parse_repository_url(url)
-        # Validate overrides before performing network work.
+        # Check the display name before contacting GitHub.
         self._display_name(projectName, repository)
         start = monotonic()
         downloader = GitHubDownloader(self.limits, self.github_settings, self._github_client)

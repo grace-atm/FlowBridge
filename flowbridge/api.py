@@ -19,6 +19,7 @@ from .registry import ProjectRegistry
 from .service import CodeManager
 
 
+# These models describe the request and error JSON exchanged with the UI.
 class GitHubImportRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     url: str
@@ -39,6 +40,7 @@ def get_registry(request: Request) -> ProjectRegistry:
     return request.app.state.registry
 
 
+# Each import request gets a separate manager and its own current project.
 def get_code_manager(request: Request) -> CodeManager:
     return CodeManager(
         limits=request.app.state.import_limits,
@@ -54,6 +56,7 @@ ERROR_RESPONSES = {
 }
 
 
+# Each app owns its registry; blocking imports run in FastAPI's worker threads.
 def create_app(
     *,
     import_limits: ImportLimits | None = None,
@@ -67,8 +70,6 @@ def create_app(
         "http://127.0.0.1:3000",
     ),
 ) -> FastAPI:
-    """Create isolated application state. Injected HTTP clients remain caller-owned."""
-
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         try:

@@ -1,4 +1,4 @@
-"""The single shared Python/JSON contract for Code Manager and downstream modules."""
+# These models are shared with the parser and source-mapping layer.
 
 from typing import Self
 from uuid import UUID, uuid4
@@ -14,8 +14,6 @@ def _uuid_string(value: str) -> str:
 
 
 class SourceFile(BaseModel):
-    """Original decoded source; IDs and content remain unchanged after creation."""
-
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
     fileID: str = Field(default_factory=lambda: str(uuid4()))
@@ -41,8 +39,6 @@ class SourceFile(BaseModel):
 
 
 class PyProject(BaseModel):
-    """Project contract with linear lookups, so no private indexes can become stale."""
-
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
     projectID: str = Field(default_factory=lambda: str(uuid4()))
@@ -70,7 +66,6 @@ class PyProject(BaseModel):
         return self
 
     def addFile(self, file: SourceFile) -> None:
-        """Append one source file, rejecting either form of duplicate identity."""
         if any(item.fileID == file.fileID or item.filePath == file.filePath for item in self.files):
             raise DuplicateFile(
                 "File ID or path already exists in this project.", filePath=file.filePath
@@ -84,10 +79,10 @@ class PyProject(BaseModel):
         raise FileNotFoundInProject("No file with that ID exists in this project.")
 
     def getFileID(self, fileID: str) -> SourceFile:
-        """UML compatibility name: returns the SourceFile object, not an ID string."""
+        # The UML name returns a file object, despite being called getFileID.
         return self.getFileByID(fileID)
 
 
-# Aliases to the exact same classes, not competing model implementations.
+# Keep the names from the UML as aliases.
 pyProject = PyProject
 sourceFile = SourceFile

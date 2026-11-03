@@ -24,8 +24,8 @@ _REPOSITORY = re.compile(r"[A-Za-z0-9_.-]{1,100}")
 _REDIRECT_STATUSES = {301, 302, 303, 307, 308}
 
 
+# Accept repository-root links rather than individual GitHub files or folders.
 def parse_repository_url(url: str) -> tuple[str, str]:
-    """Accept only HTTPS github.com repository roots, optionally ending in .git."""
     message = "Use a repository root URL: https://github.com/owner/repository (no tree/blob path)."
     try:
         if not url or any(ord(char) < 33 or ord(char) == 127 for char in url):
@@ -61,14 +61,8 @@ class RepositoryArchive:
     wrapper_prefix: str
 
 
+# Async requests let the overall timeout stop a slow download.
 class GitHubDownloader:
-    """One import per instance; injected clients are owned/closed by the caller.
-
-    Network work is asynchronous internally so asyncio.timeout can cancel a slow
-    streaming response at the overall deadline, including a continuously busy one.
-    CodeManager's synchronous adapter runs this coroutine in its worker thread.
-    """
-
     def __init__(
         self,
         limits: ImportLimits,
@@ -114,8 +108,7 @@ class GitHubDownloader:
         if not isinstance(branch, str):
             raise GitHubUnavailable("GitHub returned invalid default-branch metadata.")
 
-        # A repository may have been renamed. Use validated canonical metadata
-        # only for the known archive wrapper; never follow metadata-provided URLs.
+        # Use canonical names to recognize the archive folder after a repository rename.
         canonical_owner = metadata.get("owner", {})
         if not isinstance(canonical_owner, dict):
             raise GitHubUnavailable("GitHub returned invalid repository metadata.")
@@ -153,8 +146,7 @@ class GitHubDownloader:
             timeout = httpx.Timeout(
                 self.settings.read_timeout, connect=self.settings.connect_timeout
             )
-            # Construct a fresh Request instead of inheriting client headers,
-            # cookies, query parameters, or credentials across archive redirects.
+            # Fresh requests keep client credentials and cookies off archive redirects.
             request = httpx.Request(
                 "GET", url, headers=headers, extensions={"timeout": timeout.as_dict()}
             )
@@ -173,7 +165,6 @@ class GitHubDownloader:
                         raise InvalidGitHubRedirect(
                             "GitHub returned a malformed redirect."
                         ) from None
-                    # Validate before making the next request.
                     self._validate_destination(url, metadata=metadata)
                     continue
                 self._check_status(response, metadata=metadata)
