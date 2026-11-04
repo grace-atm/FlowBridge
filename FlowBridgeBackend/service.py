@@ -1,0 +1,111 @@
+"""Import source files into a project and retrieve their original text."""
+
+import asyncio
+import os
+from time import monotonic
+from typing import BinaryIO
+
+import httpx
+
+from .config import GitHubSettings, ImportLimits
+from .errors import FileNotFoundInProject, GitHubTimeout, InvalidInput, NoProjectLoaded
+from .github import GitHubDownloader, parse_repository_url
+from .models import PyProject, SourceFile
+from .paths import normalize_relative_path, upload_basename
+from .readers import decode_source, read_bounded, read_zip
+
+
+# An import replaces the current project only after every file has been read.
+class CodeManager:
+    def __init__(
+        self,
+        *,
+        limits: ImportLimits | None = None,
+        github_settings: GitHubSettings | None = None,
+        github_client: httpx.AsyncClient | None = None,
+    ) -> None:
+        self.project: PyProject | None = None
+        self.limits = limits or ImportLimits()
+        self.github_settings = github_settings or GitHubSettings(
+            token=os.environ.get("GITHUB_TOKEN")
+        )
+        self._github_client = github_client
+
+    @staticmethod
+    def _display_name(override: str | None, default: str) -> str:
+        name = default if override is None else override
+        if not name.strip():
+            raise InvalidInput("projectName must be nonblank when provided.")
+        return name.strip()
+
+    @staticmethod
+    def _filename(value: str, extension: str) -> str:
+        try:
+            name = upload_basename(value)
+        except ValueError:
+            raise InvalidInput("Upload must have a valid filename.") from None
+        if not name.lower().endswith(extension):
+            raise InvalidInput(f"Upload must have a {extension} filename.")
+        return name
+
+    # Build the new project before replacing the previous one.
+    def _commit(self, files: list[SourceFile], name: str) -> list[SourceFile]:
+        candidate = PyProject(projectName=name, files=files)
+        self.project = candidate
+        return candidate.files
+
+    # Import one Python upload and make it the current project.
+    def loadFile(
+        self, file: BinaryIO, *, fileName: str, projectName: str | None = None
+    ) -> list[SourceFile]:
+        name = self._filename(fileName, ".py")
+        display = self._display_name(projectName, name[:-3])
+        content = read_bounded(
+            file, min(self.limits.max_file_bytes, self.limits.max_source_bytes), filePath=name
+        )
+        return self._commit([decode_source(content, name)], display)
+
+    # Collect the Python files from a ZIP, keeping their relative paths.
+    def loadZip(
+        self, file: BinaryIO, *, fileName: str, projectName: str | None = None
+    ) -> list[SourceFile]:
+        name = self._filename(fileName, ".zip")
+        display = self._display_name(projectName, name[:-4])
+        content = read_bounded(file, self.limits.max_archive_bytes)
+        return self._commit(read_zip(content, self.limits), display)
+
+    # Download a public repository and read it with the same ZIP reader.
+    def loadGit(self, url: str, *, projectName: str | None = None) -> list[SourceFile]:
+        _, repository = parse_repository_url(url)
+        # Check the display name before contacting GitHub.
+        self._display_name(projectName, repository)
+        start = monotonic()
+        downloader = GitHubDownloader(self.limits, self.github_settings, self._github_client)
+        # FastAPI runs this synchronous loader in a worker thread.
+        archive = asyncio.run(downloader.fetch(url))
+        files = read_zip(archive.data, self.limits, github_prefix=archive.wrapper_prefix)
+        if monotonic() - start > self.github_settings.overall_timeout:
+            raise GitHubTimeout("GitHub import exceeded the overall deadline.")
+        return self._commit(files, self._display_name(projectName, archive.name))
+
+    # Return the project from the last successful import.
+    def getProject(self) -> PyProject:
+        if self.project is None:
+            raise NoProjectLoaded("No project has been imported yet.")
+        return self.project
+
+    # Find an original file in the current project using its ID.
+    def getSourceFile(self, fileID: str) -> SourceFile:
+        return self.getProject().getFileByID(fileID)
+
+    # Find a file by its full relative path, such as app/main.py.
+    def getSourceFileByPath(self, filePath: str) -> SourceFile:
+        project = self.getProject()
+        try:
+            path = normalize_relative_path(filePath)
+        except ValueError:
+            raise InvalidInput("Source lookup requires a safe project-relative path.") from None
+        for file in project.files:
+            if file.filePath == path:
+                return file
+        raise FileNotFoundInProject("No file with that path exists in this project.", filePath=path)
