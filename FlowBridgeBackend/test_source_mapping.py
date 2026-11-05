@@ -1,4 +1,4 @@
-from source_mapping import SourceMappingLayer
+from .source_mapping import SourceMappingLayer
 
 
 mock_mapping_output = {
