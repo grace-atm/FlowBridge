@@ -89,3 +89,22 @@ class PyProject(BaseModel):
 # Keep the names from the UML as aliases.
 pyProject = PyProject
 sourceFile = SourceFile
+
+from dataclasses import dataclass
+
+# Data models for Source Mapping and Source Location.
+
+@dataclass
+class SourceLocation:
+    fileId: str
+    startLine: int
+    endLine: int
+    startColumn: int
+    endColumn: int
+
+
+@dataclass
+class SourceMapping:
+    graphId: str
+    nodeId: str
+    location: SourceLocation
